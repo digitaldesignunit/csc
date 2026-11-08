@@ -376,7 +376,7 @@ class ComponentIdentity(BaseModel):
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         alias="_id",
-        description="Globally unique identity identifier (GUID)"
+        description="Globally unique component id (GUID)"
     )
     catalog_number: int = Field(
         description=(
@@ -432,19 +432,19 @@ class ComponentIdentity(BaseModel):
     )
     attributes: Optional[Dict] = Field(
         default_factory=dict,
-        description="Additional static metadata about the physical element"
+        description="Additional static metadata about the physical component"
     )
     parent_identities: Optional[List[str]] = Field(
         None,
         description=(
-            "UUIDs of immediate parent identities. Single-element for 1:1 "
+            "UUIDs of immediate parent components. Single-element for 1:1 "
             "splits; multi-element for N:1 merges. `None` if no known parent."
         )
     )
     consumed_at: Optional[str] = Field(
         None,
         description=(
-            "ISO-8601 timestamp when the physical element ceased to exist as "
+            "ISO-8601 timestamp when the physical component ceased to exist as "
             "a discrete object (split, demolished, returned). `None` = active."
         )
     )
@@ -458,14 +458,14 @@ class ComponentIdentity(BaseModel):
     current_snapshot_id: str = Field(
         description=(
             "UUID of the snapshot in `component_snapshots` that represents "
-            "the current state of this identity."
+            "the current snapshot of this component."
         )
     )
     created: str = Field(
-        description="ISO timestamp when this identity was first recorded"
+        description="ISO timestamp when this component was first recorded"
     )
     lastmodified: str = Field(
-        description="ISO timestamp when this identity was last modified"
+        description="ISO timestamp when this component was last modified"
     )
 
     @field_validator('componenttype')
@@ -521,7 +521,7 @@ class ComponentIdentity(BaseModel):
 
 
 class ComponentSnapshot(BaseModel):
-    """State of one identity at one point in time. Version 0 created at M3."""
+    """A snapshot: the state of one component at one point in time. Snapshot v0 created at M3."""
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         alias="_id",
@@ -532,8 +532,8 @@ class ComponentSnapshot(BaseModel):
     )
     version: int = Field(
         description=(
-            "Per-identity monotonic version, zero-based. First snapshot for "
-            "an identity is `0`. Unique on (identity_id, version). "
+            "Per-component monotonic snapshot number, zero-based. First snapshot for "
+            "a component is `0`. Unique on (identity_id, version). "
             "Server-assigned: never accept this field from client payloads; "
             "the backend computes it (`0` on initial create, "
             "`max(existing)+1` on snapshot evolution)."
@@ -543,14 +543,14 @@ class ComponentSnapshot(BaseModel):
         default=False,
         description=(
             "True when this snapshot represents a hypothetical / proposal "
-            "(not yet realized on the physical element). Migrated snapshots "
+            "(not yet realized on the physical component). Migrated snapshots "
             "from legacy are `False`."
         )
     )
     name: Optional[str] = Field(
         'Unnamed Component',
         description=(
-            "Human readable name for this state (can change across "
+            "Human readable name for this snapshot (can change across "
             "snapshots, e.g. on remanufacturing)."
         )
     )
@@ -584,7 +584,7 @@ class ComponentSnapshot(BaseModel):
     condition: Optional[int] = Field(
         None,
         description=(
-            "Condition grade for this state. 0 = destroyed/retired, "
+            "Condition grade for this snapshot. 0 = destroyed/retired, "
             "1 = poor, 2 = average, 3 = good. `None` = unknown."
         )
     )
@@ -595,22 +595,22 @@ class ComponentSnapshot(BaseModel):
     location: Optional[ComponentLocation] = Field(
         {'lat': 0.0, 'lon': 0.0},
         description=(
-            "Geographic location of the element at the time of this snapshot. "
+            "Geographic location of the component at the time of this snapshot. "
             "PATCH-able on the current snapshot without creating a new one."
         )
     )
     processes: Optional[Dict] = Field(
         default_factory=dict,
-        description="Manufacturing or processing information for this state"
+        description="Manufacturing or processing information for this snapshot"
     )
     iframe: ComponentFrame = Field(
         description=(
-            "Insertion frame / transformation matrix for this state"
+            "Insertion frame / transformation matrix for this snapshot"
         )
     )
     pca_frame: ComponentFrame = Field(
         description=(
-            "PCA frame / principal-component transformation for this state"
+            "PCA frame / principal-component transformation for this snapshot"
         )
     )
     validated: bool = Field(
@@ -633,7 +633,7 @@ class ComponentSnapshot(BaseModel):
         None,
         description=(
             "User id of whoever created this snapshot (set on v0 create; "
-            "records who added the identity to the catalog)"
+            "records who added the component to the catalog)"
         ),
     )
     added_by_username: Optional[str] = Field(
@@ -646,7 +646,7 @@ class ComponentSnapshot(BaseModel):
     notes: Optional[str] = Field(
         None,
         max_length=5000,
-        description="Free-text notes for this snapshot state",
+        description="Free-text notes for this snapshot",
     )
     quantity: int = Field(
         default=1,
@@ -673,7 +673,7 @@ class ComponentSnapshot(BaseModel):
         description=(
             "Indices of ``geometry.point_clouds`` whose full cloud is stored "
             "as a file (``point_clouds/<snapshot_id>/<i>.ply``); set by the "
-            "upload route. Absent on versions uploaded before the marker "
+            "upload route. Absent on snapshots uploaded before the marker "
             "existed. Example: [0]."
         ),
     )

@@ -148,8 +148,9 @@ TABLE = [
     ('delete_dataset', Target(D, kind='dataset'), {'mod', 'admin'}),    # 8.139 f
     ('set_dataset_public', Target(D, kind='dataset'), {'mod', 'admin'}),   # 8.131 c
     ('invite', Target(D, kind='dataset'), {'mod', 'admin'}),
+    # the creator loses the right with the role (8.193 c)
     ('revoke_invitation', Target(D, kind='invitation', author_id='contrib'),
-     {'contrib', 'mod', 'admin'}),
+     {'mod', 'admin'}),
     # admin only
     ('create_dataset', Target(D),
      {'stranger', 'author', 'contrib', 'review', 'mod', 'admin'}),   # 8.139

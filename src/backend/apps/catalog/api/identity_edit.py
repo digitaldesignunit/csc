@@ -60,6 +60,7 @@ from apps.catalog.read_models import identity_body, snapshot_body
 from apps.catalog.vocab import (
     INHERIT_UNITS,
     IN_PLACE_EXIT_KINDS,
+    OPEN_STATUSES,
     TERMINAL_EXIT_KINDS,
     ExitKind,
     OriginalFunction,
@@ -73,6 +74,7 @@ from .access import (
     identity_ever_published,
     load_datasets,
     load_identity,
+    require,
     viewer_of,
 )
 from .auth import get_current_active_user
@@ -138,6 +140,11 @@ class ExitBody(_Strict):
 
 class ReenterBody(_Strict):
     origin: Origin
+
+
+class MoveBody(_Strict):
+    """The dataset a component moves to (8.191)."""
+    dataset: str
 
 
 class DeinstallBody(_Strict):
@@ -347,7 +354,7 @@ async def create_identity(
     each parent must be cuttable (8.8, 8.34). Every inheritance unit the
     body does not state is copied from the parents (3.1.2); a merge whose
     parents disagree on ``material`` or ``original_function`` needs them
-    stated. The identity stays unpublished until its v0 is published.
+    stated. The component stays unpublished until its v0 is published.
     """
     from .snapshot_lifecycle import (  # the snapshot module imports this one
         SnapshotDraftBody,
@@ -355,11 +362,11 @@ async def create_identity(
     )
     viewer = viewer_of(current_user)
     identity_id = body.id or str(uuid.uuid4())
-    validate_uuid(identity_id, label='identity id')
+    validate_uuid(identity_id, label='component id')
     identities = request.app.mongodb_component_identities
     if await identities.find_one({'_id': identity_id}, {'_id': 1}):
         raise HTTPException(status_code=409,
-                            detail=f'Identity {identity_id} already exists')
+                            detail=f'Component {identity_id} already exists')
     datasets = await load_datasets(request)
     if body.dataset not in datasets:
         raise HTTPException(status_code=422,
@@ -367,14 +374,14 @@ async def create_identity(
 
     parents: List[Dict[str, Any]] = []
     for pid in body.parent_identities or []:
-        validate_uuid(pid, label='parent identity id')
+        validate_uuid(pid, label='parent component id')
         if pid == identity_id:
             raise HTTPException(status_code=422,
                                 detail='A component is not its own parent.')
         parent = await identities.find_one({'_id': pid})
         if parent is None:
             raise HTTPException(status_code=404,
-                                detail=f'Parent identity {pid} not found')
+                                detail=f'Parent component {pid} not found')
         parents.append(parent)
     readable = True
     for parent in parents:
@@ -590,6 +597,14 @@ async def patch_identity(
     return JSONResponse(status_code=200, content=identity_body(written))
 
 
+def refuse_withdrawn(identity: Dict[str, Any]) -> None:
+    """A withdrawn element stays out of circulation (8.190): a moderator
+    reinstates it first."""
+    if identity.get('withdrawn'):
+        raise HTTPException(status_code=409,
+                            detail='The component is withdrawn.')
+
+
 # CIRCULATION -----------------------------------------------------------------
 @router.post('/identities/{identity_id}/exit',
              summary='Take a component out of circulation (moderator(D))')
@@ -600,13 +615,11 @@ async def exit_identity(
     body: ExitBody,
 ):
     """Installed, recycled, disposed, returned, lost --- or a hand-set
-    ``split`` without catalogued elements. ``merged`` is only ever set by the
+    ``split`` without catalogued components. ``merged`` is only ever set by the
     server (8.8). ``construction_work`` only for ``installed`` (I18)."""
     identity = (await load_identity(request, current_user, identity_id,
                                     'exit')).record
-    if identity.get('withdrawn'):
-        raise HTTPException(status_code=409, detail='The component is '
-                                                    'withdrawn.')
+    refuse_withdrawn(identity)
     if not await identity_ever_published(request, identity):
         raise HTTPException(status_code=409,
                             detail='Not published yet: it never entered '
@@ -618,12 +631,12 @@ async def exit_identity(
     if body.kind == 'merged':
         raise HTTPException(status_code=422,
                             detail='merged is set by the server when a '
-                                   'merged element is published (8.8).')
+                                   'merged component is published (8.8).')
     if (identity.get('origin') or {}).get('planned') \
             and body.kind not in IN_PLACE_EXIT_KINDS:
         raise HTTPException(
             status_code=409,
-            detail=f'An element still in place leaves as '
+            detail=f'A component still in place leaves as '
                    f'{", ".join(IN_PLACE_EXIT_KINDS)} only; it never left '
                    f'its works, so it was not {body.kind}. Record its '
                    f'deinstallation first (8.104).')
@@ -646,6 +659,7 @@ async def undo_exit(
     withdraw the child instead (8.8)."""
     identity = (await load_identity(request, current_user, identity_id,
                                     'exit')).record
+    refuse_withdrawn(identity)
     exit_ = identity.get('exit')
     if not exit_:
         raise HTTPException(status_code=409, detail='The component is in '
@@ -653,7 +667,7 @@ async def undo_exit(
     if exit_.get('recorded_by_user_id') is None:
         raise HTTPException(
             status_code=409,
-            detail='This split / merge follows from published elements cut '
+            detail='This split / merge follows from published components cut '
                    'from it; withdraw those to undo it (8.8).')
     after = _validated({**identity, 'exit': None})
     written = await _write(request, identity, after,
@@ -671,20 +685,21 @@ async def reenter_identity(
     body: ReenterBody,
 ):
     """
-    An installed, returned or lost element comes back with a new origin; the
+    An installed, returned or lost component comes back with a new origin; the
     old ``{origin, exit}`` goes to ``past_cycles`` (3.1.3). Terminal exits
     cannot re-enter (I18). The next snapshot defaults to the new
     ``origin.at`` (8.19). A re-entered child owns its new origin.
     """
     identity = (await load_identity(request, current_user, identity_id,
                                     'reenter')).record
+    refuse_withdrawn(identity)
     exit_ = identity.get('exit')
     if not exit_:
         raise HTTPException(status_code=409, detail='The component is in '
                                                     'circulation.')
     if exit_.get('kind') in TERMINAL_EXIT_KINDS:
         raise HTTPException(status_code=409,
-                            detail=f'A {exit_["kind"]} element no longer exists '
+                            detail=f'A {exit_["kind"]} component no longer exists '
                                    f'as this component; it cannot re-enter '
                                    f'(I18).')
     cycles = [*(identity.get('past_cycles') or []),
@@ -700,6 +715,66 @@ async def reenter_identity(
                            user_id=current_user.id, cause='reenter')
     await propagate_from(request, written, changed_units(identity, written),
                          user_id=current_user.id)
+    return JSONResponse(status_code=200, content=identity_body(written))
+
+
+# MOVE (decision 8.191) -------------------------------------------------------
+@router.post('/identities/{identity_id}/move',
+             summary='Move a component to another dataset (moderator of '
+                     'both datasets)')
+async def move_identity(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    identity_id: str,
+    body: MoveBody,
+):
+    """
+    Changes ``dataset`` on the component (the only place it is stored; catalog
+    numbers are global) and writes a change-log entry. ``move_identity``:
+    moderator of the source and of the destination dataset, an admin always.
+    A withdrawn component moves too, so that a dataset can be emptied and
+    deleted. 409 while a snapshot or an evidence record of the component is
+    draft or pending: the rights of its author hang on the dataset. A public
+    component does not move into a dataset an admin has not reviewed, unless an
+    admin moves it (8.139 c). Accepted as they are (8.191, amended): the
+    refusal looks at the component's own records only, so a child's pending
+    first snapshot does not block its parent; a rejected snapshot or record does
+    not block; a reservation survives the move.
+    """
+    identity = (await load_identity(request, current_user, identity_id,
+                                    None)).record
+    datasets = await load_datasets(request)
+    source = await dataset_of(request, identity.get('dataset'))
+    destination = datasets.get(body.dataset)
+    # an unknown destination is checked against the source, so that a caller
+    # who may not move from it gets the 403 before any word about the target
+    viewer = await require(request, current_user, 'move_identity',
+                           identity=identity,
+                           destination=destination or source)
+    if destination is None:
+        raise HTTPException(status_code=422,
+                            detail=f'dataset: unknown dataset {body.dataset!r}')
+    if destination.id == identity.get('dataset'):
+        raise HTTPException(status_code=409,
+                            detail='The component is in this dataset '
+                                   'already.')
+    for name, collection in (
+            ('version', request.app.mongodb_component_snapshots),
+            ('evidence record', request.app.mongodb_component_evidence)):
+        if await collection.count_documents(
+                {'identity_id': identity_id, 'status': {'$in': list(
+                    OPEN_STATUSES)}}, limit=1):
+            raise HTTPException(
+                status_code=409,
+                detail=f'A {name} of the component is still draft or '
+                       f'pending; publish, reject or delete it first, '
+                       f'since the rights of its author hang on the dataset '
+                       f'(8.191).')
+    if identity.get('is_public') is True:
+        refuse_unreviewed(destination, viewer)                    # 8.139 c
+    after = _validated({**identity, 'dataset': destination.id})
+    written = await _write(request, identity, after,
+                           user_id=current_user.id, cause='patch')
     return JSONResponse(status_code=200, content=identity_body(written))
 
 
@@ -739,7 +814,7 @@ async def _dated_after(request: Request, identity_id: str, at: str
         {'identity_id': identity_id, 'status': live},
         {'effective_from': 1}).to_list(length=None)
     if any(_moment(s['effective_from']) > moment for s in snapshots):
-        return 'a state starts after the deinstallation'
+        return 'a snapshot starts after the deinstallation'
     records = await request.app.mongodb_component_evidence.find(
         {'identity_id': identity_id, 'status': live},
         {'observed_at': 1, 'sampled_at': 1}).to_list(length=None)
@@ -758,15 +833,17 @@ async def undo_deinstall_refusal(request: Request, identity: Dict[str, Any]
     act, 8.115 a) and no state or evidence is dated after it (8.104). The
     undo route answers 409 with this text; the passport carries
     ``can_undo_deinstall`` for the menu."""
+    if identity.get('withdrawn'):
+        return 'The component is withdrawn.'
     origin = identity.get('origin') or {}
     if origin.get('planned') or origin.get('kind') not in (
             'deinstallation', 'demolition'):
-        return 'The element is not a deinstalled one.'
+        return 'The component is not a deinstalled one.'
     exit_ = identity.get('exit')
     if (exit_ and exit_.get('recorded_by_user_id') is not None
             and exit_.get('kind') not in IN_PLACE_EXIT_KINDS):
-        return (f'The element left as {exit_["kind"]}, which only a '
-                f'deinstalled element can do (8.104).')
+        return (f'The component left as {exit_["kind"]}, which only a '
+                f'deinstalled component can do (8.104).')
     if not origin.get('at'):
         return ('The deinstallation has no date; set the date by PATCH '
                 'of the origin first (8.115).')
@@ -783,7 +860,7 @@ async def undo_deinstall_refusal(request: Request, identity: Dict[str, Any]
 
 
 @router.post('/identities/{identity_id}/deinstall',
-             summary='Record the deinstallation of an in-place element '
+             summary='Record the deinstallation of an in-place component '
                      '(moderator(D))')
 async def deinstall_identity(
     request: Request,
@@ -794,7 +871,7 @@ async def deinstall_identity(
     """
     ``planned`` becomes false and the given fields go into the existing
     origin; ``kind`` may switch to ``demolition``. A reservation survives;
-    no snapshot is created. The origin is now the element's own, and every
+    no snapshot is created. The origin is now the component's own, and every
     descendant that still inherits it follows, like a parent's PATCH of
     ``origin`` (3.1.2, 8.110).
     """
@@ -803,15 +880,13 @@ async def deinstall_identity(
     origin = identity.get('origin') or {}
     if not origin.get('planned'):
         raise HTTPException(status_code=409,
-                            detail='The element is not in place; there is '
+                            detail='The component is not in place; there is '
                                    'nothing to deinstall.')
-    if identity.get('withdrawn'):
-        raise HTTPException(status_code=409,
-                            detail='The component is withdrawn.')
+    refuse_withdrawn(identity)
     if (identity.get('exit') or {}).get('recorded_by_user_id') is not None:
         # a split the server keeps from cut pieces does not stop it
         raise HTTPException(status_code=409,
-                            detail='The element left circulation while in '
+                            detail='The component left circulation while in '
                                    'place; undo that exit first.')
     given = body.model_dump(mode='json', exclude_none=True)
     new_origin = {**origin, 'planned': False, **given}
@@ -831,7 +906,7 @@ async def undo_deinstall(
     current_user: Annotated[User, Depends(get_current_active_user)],
     identity_id: str,
 ):
-    """``planned`` is true again, but only while no state starts and no
+    """``planned`` is true again, but only while no snapshot starts and no
     evidence is valid after the deinstallation's ``at``; later than that a
     moderator corrects the origin by PATCH (8.104). Propagates like the
     deinstall."""

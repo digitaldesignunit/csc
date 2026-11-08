@@ -27,7 +27,7 @@ from oauth_helpers import (
 )
 from support import iid, seed_05_catalog, sid
 
-TOOLS = {'search_components', 'get_component', 'list_versions', 'get_version',
+TOOLS = {'search_components', 'get_component', 'list_snapshots', 'get_snapshot',
          'get_evidence', 'list_datasets', 'get_dataset', 'get_timeline',
          'similar_components', 'catalog_overview'}
 WEB = 'http://localhost:3000'
@@ -173,8 +173,8 @@ def test_the_tools_write_nothing(api, db, world):
              'change_log', 'users', 'invitations')
     before = {n: sorted(map(repr, db[n].find({}))) for n in names}
     for name, args in (('search_components', {}), ('get_component', {'component_id': iid('beam')}),
-                       ('list_versions', {'component_id': iid('beam')}),
-                       ('get_version', {'version_id': sid('beam', 1)}),
+                       ('list_snapshots', {'component_id': iid('beam')}),
+                       ('get_snapshot', {'snapshot_id': sid('beam', 1)}),
                        ('get_evidence', {'component_id': iid('beam')}), ('list_datasets', {}),
                        ('get_dataset', {'dataset_id': 'dbu_zirkus'}),
                        ('get_timeline', {'component_id': iid('beam')})):
@@ -448,8 +448,8 @@ def test_nothing_private_reaches_an_account_without_a_role_in_the_dataset(api, w
     assert iid('beam') not in str(found)
     is_error, text = tool_result(api, plain['pat'], 'get_component', component_id=iid('beam'))
     assert is_error and text.endswith('Not found, or not visible to you.')
-    for name, args in (('list_versions', {'component_id': iid('beam')}),
-                       ('get_version', {'version_id': sid('beam', 1)}),
+    for name, args in (('list_snapshots', {'component_id': iid('beam')}),
+                       ('get_snapshot', {'snapshot_id': sid('beam', 1)}),
                        ('get_evidence', {'component_id': iid('beam')}),
                        ('get_timeline', {'component_id': iid('beam')}),
                        ('get_dataset', {'dataset_id': 'dbu_zirkus'})):
@@ -475,11 +475,11 @@ def test_get_component_is_short_with_a_geometry_summary_and_its_links(api, world
     assert answer['origin']['place'] == 'TU Darmstadt Lichtwiese Campus'
     assert answer['properties']['rebar_diameter']['unit'] == 'mm'
     assert 'confidence' in answer['properties']['rebar_diameter']
-    current = answer['current_version']
+    current = answer['current_snapshot']
     assert current['version'] == 1 and current['status'] == 'published' and current['id'] == sid('beam', 1)
     assert current['geometry']['meshes'] == 1 and current['geometry']['mesh_vertices'] == 4
     assert 'Geometry is not sent' in current['geometry']['note']
-    assert answer['version_count'] == 2
+    assert answer['snapshot_count'] == 2
     assert answer['web_link'] == f'{WEB}/components/{iid("beam")}'
     text = json.dumps(answer)
     assert '"vertices"' not in text and '"faces"' not in text
@@ -491,12 +491,12 @@ def test_an_unknown_component_is_not_found_not_an_error_of_ours(api, world):
         assert is_error and text.endswith('Not found, or not visible to you.') or 'not valid' in text, text
 
 
-def test_list_versions_and_get_version(api, world):
-    versions = tool(api, world['admin'], 'list_versions', component_id=iid('beam'))
-    assert [v['version'] for v in versions['versions']] == [0, 1]
-    assert [v['is_current'] for v in versions['versions']] == [False, True]
-    assert versions['versions'][1]['web_link'] == f'{WEB}/components/{iid("beam")}?snapshot={sid("beam", 1)}'
-    one = tool(api, world['admin'], 'get_version', version_id=sid('beam', 1))
+def test_list_snapshots_and_get_snapshot(api, world):
+    versions = tool(api, world['admin'], 'list_snapshots', component_id=iid('beam'))
+    assert [v['version'] for v in versions['snapshots']] == [0, 1]
+    assert [v['is_current'] for v in versions['snapshots']] == [False, True]
+    assert versions['snapshots'][1]['web_link'] == f'{WEB}/components/{iid("beam")}?snapshot={sid("beam", 1)}'
+    one = tool(api, world['admin'], 'get_snapshot', snapshot_id=sid('beam', 1))
     assert one['id'] == sid('beam', 1) and one['component_id'] == iid('beam') and one['status'] == 'published'
     assert one['geometry'] == {'meshes': 1, 'mesh_vertices': 4, 'mesh_faces': 4, 'point_clouds': 0, 'proxies': 0,
                                'note': 'Geometry is not sent; open the web link to see it.'}
@@ -531,8 +531,8 @@ def test_no_e_mail_address_and_no_account_id_in_any_answer(api, db, world):
     answers = []
     for name, args in (('search_components', {'circulation': 'all', 'status': 'any'}),
                        ('get_component', {'component_id': iid('beam')}),
-                       ('list_versions', {'component_id': iid('beam')}),
-                       ('get_version', {'version_id': sid('beam', 1)}),
+                       ('list_snapshots', {'component_id': iid('beam')}),
+                       ('get_snapshot', {'snapshot_id': sid('beam', 1)}),
                        ('get_evidence', {'component_id': iid('beam')}),
                        ('get_evidence', {'evidence_id': record['_id']}),
                        ('list_datasets', {}), ('get_dataset', {'dataset_id': 'dbu_zirkus'}),
@@ -895,28 +895,28 @@ def test_the_geometry_summary_has_no_reinforcement_count_any_more():
 def test_a_version_reports_its_reinforcement_layouts_from_the_evidence(api, db, world):
     admin = world['admin']
     component = tool(api, admin, 'get_component', component_id=iid('beam'))
-    layouts = component['current_version']['reinforcement_layouts']
+    layouts = component['current_snapshot']['reinforcement_layouts']
     assert layouts['records'] == 1 and layouts['bars'] == 1
     assert 'get_evidence' in layouts['note'] and 'reinforcement_layout' in layouts['note']
-    assert 'reinforcements' not in component['current_version']['geometry']
-    assert 'Geometry is not sent' in component['current_version']['geometry']['note']
-    now = tool(api, admin, 'get_version', version_id=sid('beam', 1))
+    assert 'reinforcements' not in component['current_snapshot']['geometry']
+    assert 'Geometry is not sent' in component['current_snapshot']['geometry']['note']
+    now = tool(api, admin, 'get_snapshot', snapshot_id=sid('beam', 1))
     assert now['reinforcement_layouts']['records'] == 1 and now['reinforcement_layouts']['bars'] == 1
     assert 'reinforcements' not in now['geometry']
     # the layout names version 1: the version before it has none
-    before = tool(api, admin, 'get_version', version_id=sid('beam', 0))
+    before = tool(api, admin, 'get_snapshot', snapshot_id=sid('beam', 0))
     assert before['reinforcement_layouts']['records'] == 0 and before['reinforcement_layouts']['bars'] == 0
     plain_piece = tool(api, admin, 'get_component', component_id=iid('feld'))
-    assert plain_piece['current_version']['reinforcement_layouts']['records'] == 0
+    assert plain_piece['current_snapshot']['reinforcement_layouts']['records'] == 0
 
 
 def test_a_pending_layout_is_not_counted_and_two_records_add_their_bars(api, db, world):
     admin = world['admin']
     pending = _layout_for(db, 'beam', status='pending')
     db['component_evidence'].update_one({'_id': pending}, {'$set': {'position.snapshot_id': sid('beam', 1)}})
-    assert tool(api, admin, 'get_version', version_id=sid('beam', 1))['reinforcement_layouts']['records'] == 1
+    assert tool(api, admin, 'get_snapshot', snapshot_id=sid('beam', 1))['reinforcement_layouts']['records'] == 1
     db['component_evidence'].update_one({'_id': pending}, {'$set': {'status': 'published'}})
-    counted = tool(api, admin, 'get_version', version_id=sid('beam', 1))['reinforcement_layouts']
+    counted = tool(api, admin, 'get_snapshot', snapshot_id=sid('beam', 1))['reinforcement_layouts']
     assert counted['records'] == 2 and counted['bars'] == 2
 
 
@@ -926,10 +926,10 @@ def test_the_layout_helper_counts_published_records_of_the_version_only():
                 'payload': {'bars': [{}] * bars}}
     rows = [record('a', 3), record('a', 2), record('b', 7), record('a', 9, status='pending'),
             record('a', 5, method='visual_inspection'), {'method': 'reinforcement_layout', 'status': 'withdrawn'}]
-    assert mcp_server.layouts_of_version(rows, 'a')['records'] == 2
-    assert mcp_server.layouts_of_version(rows, 'a')['bars'] == 5
-    assert mcp_server.layouts_of_version(rows, 'c')['records'] == 0
-    assert mcp_server.layouts_of_version(None, 'a')['bars'] == 0
+    assert mcp_server.layouts_of_snapshot(rows, 'a')['records'] == 2
+    assert mcp_server.layouts_of_snapshot(rows, 'a')['bars'] == 5
+    assert mcp_server.layouts_of_snapshot(rows, 'c')['records'] == 0
+    assert mcp_server.layouts_of_snapshot(None, 'a')['bars'] == 0
 
 
 def test_a_layout_row_carries_a_summary_of_its_bars(api, db, world):
@@ -942,7 +942,7 @@ def test_a_layout_row_carries_a_summary_of_its_bars(api, db, world):
     row = tool(api, admin, 'get_evidence', component_id=iid('beam'), method='reinforcement_layout')['evidence'][0]
     assert row['reinforcement'] == {'bars': 3, 'basis': 'drawing', 'specs': ['BSt I', 'BSt III'],
                                     'diameters_mm': [8.0, 12.0], 'cover_mm': {'min': 25, 'max': 40},
-                                    'version_id': sid('beam', 1)}
+                                    'snapshot_id': sid('beam', 1)}
     assert 'payload' not in row and 'points' not in json.dumps(row)
     full = tool(api, admin, 'get_evidence', evidence_id=row['id'])
     assert len(full['record']['payload']['bars']) == 3

@@ -1,4 +1,4 @@
-"""'Element', not 'piece' (decision 8.183): no text a user reads from the
+"""'Component' (or 'element', an item of a batch), not 'piece' (decision 8.183): no text a user reads from the
 backend says 'piece' or 'pieces'. The check reads the string literals of the
 backend and the docstrings that become API documentation (routes, tools,
 models); comments, other docstrings, log lines, identifiers and the cron
@@ -93,7 +93,7 @@ def test_no_text_of_the_backend_says_piece():
             continue
         for line, text in piece_texts(source):
             problems.append(f'{path.relative_to(BACKEND).as_posix()}:{line}: {text}')
-    assert not problems, 'say "element" instead:\n' + '\n'.join(problems)
+    assert not problems, 'say "component" instead (an item of a batch is an "element"):\n' + '\n'.join(problems)
 
 
 def test_the_check_sees_a_message_a_route_docstring_and_a_description():

@@ -50,7 +50,7 @@ async def _resolve_user_id(
 
 @router.get(
     '/identities/reserved/{user_identifier}',
-    summary='List identities reserved by a user (shallow rows)',
+    summary='List components reserved by a user (shallow rows)',
 )
 async def list_reserved_identities(
     request: Request,
@@ -154,7 +154,7 @@ async def get_vocabularies():
 
 @router.get(
     '/identities/meta/datasets',
-    summary='Datasets that hold identities (dropdowns)',
+    summary='Datasets that hold components (dropdowns)',
 )
 @local_limiter.limit('120/minute', key_func=signed_in_or_ip)
 async def list_identity_datasets(
@@ -180,7 +180,7 @@ async def list_identity_datasets(
 
 @router.post(
     '/identities/{identity_id}/reserve',
-    summary='Reserve identity for the current user',
+    summary='Reserve a component for the current user',
 )
 async def reserve_identity(
     request: Request,
@@ -194,7 +194,7 @@ async def reserve_identity(
     if identity.get('exit'):
         raise HTTPException(
             status_code=409,
-            detail='An element out of circulation cannot be reserved (I18)',
+            detail='A component out of circulation cannot be reserved (I18)',
         )
 
     reserved = identity.get('reserved') or ''
@@ -215,6 +215,12 @@ async def reserve_identity(
         )
     # any signed-in user who can read the piece (7.0)
     await require(request, current_user, 'reserve', identity=identity)
+    if identity.get('withdrawn'):
+        # after the permission, so that a caller who cannot read the element
+        # learns nothing of its state; the reservation was cleared when it
+        # was withdrawn (8.190)
+        raise HTTPException(status_code=409,
+                            detail='The component is withdrawn.')
 
     identities = await get_identities_col(request)
     try:
@@ -246,7 +252,7 @@ async def reserve_identity(
 
 @router.delete(
     '/identities/{identity_id}/reserve',
-    summary='Release reservation on an identity',
+    summary='Release reservation on a component',
 )
 async def release_identity_reservation(
     request: Request,

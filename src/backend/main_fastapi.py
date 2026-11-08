@@ -176,6 +176,10 @@ async def lifespan(app: FastAPI):
     await app.mongodb_component_snapshots.create_index(
         'derivation_due', name='derivation_due_marked',
         partialFilterExpression=DUE_INDEX['partialFilterExpression'])
+    # has_open_snapshot (8.195): one find_one on the element and the open
+    # statuses
+    await app.mongodb_component_snapshots.create_index(
+        [('identity_id', 1), ('status', 1)])
     await app.mongodb_component_evidence.create_index('identity_id')
     await app.mongodb_component_evidence.create_index(
         [('status', 1), ('method', 1)])

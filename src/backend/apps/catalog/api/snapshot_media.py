@@ -258,9 +258,17 @@ async def put_snapshot_photo(
     """
     Accept up to upload limit; store JPEG scaled/compressed to max output.
     """
-    await load_snapshot(
+    loaded = await load_snapshot(
         request, current_user, snapshot_id, 'add_photo', files=True,
         frozen=False)
+    # a withdrawn version, or any version of a withdrawn element, takes no
+    # new photo, for an admin as well: the state refuses (8.190)
+    if (loaded.identity or {}).get('withdrawn'):
+        raise HTTPException(status_code=409,
+                            detail='The component is withdrawn.')
+    if loaded.record.get('status') == 'withdrawn':
+        raise HTTPException(status_code=409,
+                            detail='This snapshot is withdrawn.')
 
     content_type = (photo.content_type or '').split(';', 1)[0].strip().lower()
     if content_type not in _ALLOWED_PHOTO_TYPES:

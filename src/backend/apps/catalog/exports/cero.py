@@ -35,7 +35,7 @@ from apps.catalog.vocab import QUANTITIES
 
 CERO = 'https://w3id.org/cero#'
 CERO_MATERIALS = ('concrete', 'autoclaved_aerated_concrete')
-NOT_CONCRETE = 'CERO covers concrete elements only'
+NOT_CONCRETE = 'CERO covers concrete components only'
 
 # CERO declares these two as strings, all other exported scalars as decimals
 _STRING_RANGE = ('chlorideContent',)

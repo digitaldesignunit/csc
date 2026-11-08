@@ -73,6 +73,7 @@ from .evidence_service import (
     require_contributor,
     gate_identity,
     new_evidence_doc,
+    open_corrections,
     prepare,
     viewer_context,
 )
@@ -347,7 +348,7 @@ async def list_identity_evidence(
                           'whole day)'),
     status: str = Query('published', description='a status, or all'),
     include: Optional[str] = Query(
-        None, description='comma list: context (the state of the element each '
+        None, description='comma list: context (the snapshot of the component each '
                           'record belongs to), superseded (corrected ones)'),
 ):
     """Published, non-superseded records by default; what the caller may
@@ -370,6 +371,8 @@ async def list_identity_evidence(
         raise HTTPException(status_code=500, detail='Internal server error')
     viewer = viewer_of(current_user)
     project = await _projector(request, viewer, identity)
+    # which records have a correction open: one query for the list (8.195)
+    open_ids = await open_corrections(request, viewer, identity)
     snapshots = None
     if 'context' in flags:
         snapshots = await request.app.mongodb_component_snapshots.find(
@@ -383,7 +386,8 @@ async def list_identity_evidence(
         if seen == 'full':
             items.append(await evidence_body(
                 request, viewer, doc, identity, listing=True,
-                with_context='context' in flags, snapshots=snapshots))
+                with_context='context' in flags, snapshots=snapshots,
+                open_correction=doc['_id'] in (open_ids or ())))
         elif seen == 'tombstone':
             items.append(evidence_tombstone(doc, identity))
     return JSONResponse(status_code=200, content=items)
@@ -584,20 +588,26 @@ async def get_evidence(
         return JSONResponse(status_code=200, content=project_evidence(
             rolled, tier, email_ok=email_ok))
     with_context = 'context' in {p.strip() for p in (include or '').split(',')}
+    open_ids = await open_corrections(request, viewer, identity)
+    open_correction = record['_id'] in (open_ids or ())
     if with_context:
         # the context follows the snapshots, not the record: never a 304
         body = await evidence_body(request, viewer, record, identity,
-                                   with_context=True)
+                                   with_context=True,
+                                   open_correction=open_correction)
         return JSONResponse(status_code=200, content=body, headers={
             'Cache-Control': 'no-store', 'Vary': 'Authorization'})
     tier, email_ok = await viewer_context(request, viewer, identity)
     etag = hashlib.sha256('::'.join([
-        record.get('etag') or '', tier, str(email_ok)]).encode(
+        record.get('etag') or '', tier, str(email_ok),
+        # a correction someone opens does not touch the record (8.195)
+        'open' if open_correction else '']).encode(
         'utf-8')).hexdigest()
     if request.headers.get('if-none-match') == etag:
         return not_modified_response(etag, **viewer_headers(
             cache_control='private, max-age=0'))
-    body = await evidence_body(request, viewer, record, identity)
+    body = await evidence_body(request, viewer, record, identity,
+                               open_correction=open_correction)
     return JSONResponse(status_code=200, content=body,
                         headers=viewer_headers(
                             etag=etag, cache_control='private, max-age=0'))
@@ -625,14 +635,14 @@ async def get_identity_properties(
 
 
 @router.get('/snapshots/{snapshot_id}/properties',
-            summary='Properties of one state of a component')
+            summary='Properties of one snapshot of a component')
 async def get_snapshot_properties(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     snapshot_id: str,
 ):
     """The snapshot block (the materialized as-of fold): the snapshot-scoped
-    quantities whose records resolve to this state."""
+    quantities whose records resolve to this snapshot."""
     snapshot = (await load_snapshot(request, current_user, snapshot_id,
                                     allow_tombstone=True)).record
     return JSONResponse(status_code=200, content={
@@ -648,9 +658,9 @@ async def get_timeline(
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     identity_id: str,
 ):
-    """Archived cycles, the origin, every state and correction, every
+    """Archived cycles, the origin, every snapshot and correction, every
     evidence record (where it falls: before cataloguing, in the history,
-    after the element left circulation), changes of the metadata and the exit.
+    after the component left circulation), changes of the metadata and the exit.
     What the caller may not see is left out; a withdrawn record outside the
     dataset is a bare row; outside the dataset a metadata change shows only
     its date (8.36)."""

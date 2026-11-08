@@ -242,7 +242,7 @@ def test_accepting_is_limited_per_user(world):
 
 
 # RESEND NEEDS THE CURRENT PERMISSION -----------------------------------------
-def test_a_demoted_moderator_cannot_resend_but_can_still_revoke(world):
+def test_a_demoted_moderator_can_neither_resend_nor_revoke(world):
     api, db = world['api'], world['db']
     made = _invite(world, world['moderator'], ['late@partner.example'])
     iid = made.json()[0]['invitation']['_id']
@@ -254,9 +254,14 @@ def test_a_demoted_moderator_cannot_resend_but_can_still_revoke(world):
     # an admin may; so may a moderator of the dataset
     assert api.post(f'/invitations/{iid}/resend',
                     headers=world['admin']).status_code == 200
-    # revoke stays with the creator
+    # revoke goes with the role as well (8.193 c): the creator loses it
     assert api.delete(f'/invitations/{iid}',
-                      headers=world['moderator']).status_code == 200
+                      headers=world['moderator']).status_code == 403
+    assert api.get('/invitations',
+                   headers=world['moderator']).status_code == 403
+    # an admin revokes it (a moderator of the dataset: test_invitations.py)
+    assert api.delete(f'/invitations/{iid}',
+                      headers=world['admin']).status_code == 200
 
 
 def test_a_moderator_of_another_dataset_and_a_user_cannot_resend(

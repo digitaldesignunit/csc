@@ -162,7 +162,7 @@ def _create_schema_response(request: Request, schema: dict):
 )
 async def get_create_snapshot_json_schema(request: Request):
     """
-    The 0.6 body of a new state or a correction, as the Grasshopper
+    The 0.6 body of a new snapshot or a correction, as the Grasshopper
     bridge and other clients send it. Derived fields are not part of it.
     """
     from .snapshot_lifecycle import SnapshotDraftBody

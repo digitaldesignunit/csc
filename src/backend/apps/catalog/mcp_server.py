@@ -67,9 +67,9 @@ INSTRUCTIONS = (
     'The Catalog of Second Chances (CSC) is a catalog of reused and '
     'salvaged building components (German: wiederverwendete Bauteile, '
     'Wiederverwendung, Bauteilboerse): concrete walls and beams '
-    '(Betonwaende, Traeger), stone, timber and other elements, each '
-    'with its shape, origin, versions and measurements ("evidence"). Use '
-    'these tools before a web search when the user looks for such elements, '
+    '(Betonwaende, Traeger), stone, timber and other components, each '
+    'with its shape, origin, snapshots and measurements ("evidence"). Use '
+    'these tools before a web search when the user looks for such components, '
     'for example "Betontraeger mit Bewehrung" or reused beams with '
     'reinforcement (Bewehrung): search_components with the filters below, '
     'and has_evidence=reinforcement_layout for "with reinforcement". '
@@ -85,7 +85,7 @@ GET_EVIDENCE_TEXT = (
     + EVIDENCE_METHOD_TEXT + '. A list gives short rows: method, source '
     'tier, when observed, who performed it, summary, status, verification; '
     'a reinforcement_layout row also gives a summary of its bars (count, '
-    'basis, specs, diameters, cover, the version it refers to). Filter with '
+    'basis, specs, diameters, cover, the snapshot it refers to). Filter with '
     'method. Pass evidence_id for one record in full, with its payload (the '
     'bars of a layout).')
 
@@ -204,7 +204,7 @@ def layout_bars(record: dict) -> list:
     return [b for b in bars if isinstance(b, dict)]
 
 
-def layouts_of_version(rows: list, snapshot_id: Optional[str]) -> dict:
+def layouts_of_snapshot(rows: list, snapshot_id: Optional[str]) -> dict:
     """The reinforcement of one version, from the published
     ``reinforcement_layout`` evidence that names it in ``position.snapshot_id``
     (decision 7.8: the bars are evidence, not geometry): how many records and
@@ -236,7 +236,7 @@ def layout_summary(record: dict) -> dict:
         'diameters_mm': sorted({b['diameter_mm'] for b in bars
                                 if isinstance(b.get('diameter_mm'),
                                               (int, float))}),
-        'version_id': (record.get('position') or {}).get('snapshot_id')}
+        'snapshot_id': (record.get('position') or {}).get('snapshot_id')}
     if covers:
         summary['cover_mm'] = {'min': min(covers), 'max': max(covers)}
     return summary
@@ -296,8 +296,8 @@ CirculationArg = Annotated[str, Field(description=(
     'active (default: in circulation), in_place, deinstalled, '
     'exited, all.'))]
 StatusArg = Annotated[str, Field(description=(
-    'Version status: published (default), or any to include '
-    'pending and other states you may see.'))]
+    'Snapshot status: published (default), or any to include '
+    'pending and other statuses you may see.'))]
 WithdrawnArg = Annotated[bool, Field(description=(
     'Also withdrawn components, if you may see them.'))]
 HasEvidenceArg = Annotated[str, Field(description=(
@@ -307,11 +307,11 @@ HasEvidenceArg = Annotated[str, Field(description=(
     'filter. Leave empty for all.'))]
 FitModeArg = Annotated[str, Field(description=(
     'Search by size, with size_mm: about = every side within the '
-    'tolerance of the asked side (which elements are about this '
-    'size); can_hold = every side of the element at least the asked '
-    'side (which elements can this part be cut from). The sides are '
+    'tolerance of the asked side (which components are about this '
+    'size); can_hold = every side of the component at least the asked '
+    'side (which components can this part be cut from). The sides are '
     'compared largest to smallest, so the orientation does not '
-    'matter. An element without a known size never matches.'))]
+    'matter. A component without a known size never matches.'))]
 SizeArg = Annotated[Optional[list[float]], Field(description=(
     'The asked size: three numbers in mm in any order, for example '
     '[1200, 600, 200]. Needs fit_mode.'))]
@@ -320,18 +320,18 @@ ToleranceArg = Annotated[str, Field(description=(
     'millimetres, for example "10%" (the default) or "50mm".'))]
 NearLatArg = Annotated[Optional[float], Field(description=(
     'Search by place: the latitude of the point, -90 to 90, with '
-    'near_lon. Only elements with a known place on the chosen layer '
+    'near_lon. Only components with a known place on the chosen layer '
     'are listed, nearest first, each with its distance_km.'))]
 NearLonArg = Annotated[Optional[float], Field(description=(
     'The longitude of the point, -180 to 180. Needs near_lat.'
     ))]
 NearLayerArg = Annotated[str, Field(description=(
-    'Which place of an element is measured: current (where the element '
+    'Which place of a component is measured: current (where the component '
     'is now; the default) or origin (the building it comes from, '
-    'known for fewer elements).'))]
+    'known for fewer components).'))]
 RadiusArg = Annotated[Optional[float], Field(description=(
-    'Only elements within this many km of the point. Without it every '
-    'element with a place on the layer is listed, nearest first.'
+    'Only components within this many km of the point. Without it every '
+    'component with a place on the layer is listed, nearest first.'
     ))]
 
 
@@ -445,8 +445,8 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         radius_km: RadiusArg = None,
         sort: Annotated[str, Field(description=(
             'catalog_number (default without a size or place search), date '
-            '(the version applies from), created, volume (length x width x '
-            'height; elements without a size last), match (closeness to the '
+            '(the snapshot applies from), created, volume (length x width x '
+            'height; components without a size last), match (closeness to the '
             'size search: smallest deviation, or least waste, first; the '
             'default with fit_mode and no place search), distance (from the '
             'near point, nearest first; the default with near_lat and '
@@ -460,7 +460,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         component (name, function, material, dataset, size, status,
         visibility) with its web link, and the total. With fit_mode and
         size_mm each row also carries its deviation (about, in per cent) or
-        waste (can_hold, in m3 and in per cent of the element); with near_lat
+        waste (can_hold, in m3 and in per cent of the component); with near_lat
         and near_lon each row carries its distance_km. has_evidence keeps
         only components with a published, current evidence record of one
         method, for example reinforcement_layout for "with reinforcement". Use
@@ -506,7 +506,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     ) -> dict:
         """One component: what it is, where it comes from, how it left
         circulation, its derived properties with confidence, its current
-        version in short (with the count of its reinforcement layouts and
+        snapshot in short (with the count of its reinforcement layouts and
         bars), and links. Geometry is a summary only."""
         passport = await get(f'/identities/{component_id}/compose')
         versions = await get(f'/identities/{component_id}/snapshots')
@@ -543,7 +543,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                     ('range', 'unit', 'confidence', 'source', 'n')}
                 for k, v in (identity.get('properties') or {}).items()
                 if isinstance(v, dict)},
-            'current_version': {
+            'current_snapshot': {
                 'id': current.get('_id'), 'version': current.get('version'),
                 'status': current.get('status'),
                 'shape_class': current.get('shape_class'),
@@ -554,26 +554,26 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 'effective_from': current.get('effective_from'),
                 'location': current.get('location'),
                 'geometry': geometry_summary(current.get('geometry')),
-                'reinforcement_layouts': layouts_of_version(
+                'reinforcement_layouts': layouts_of_snapshot(
                     layouts, current.get('_id'))},
-            'version_count': len(versions),
+            'snapshot_count': len(versions),
             'web_link': link_component(identity.get('_id') or component_id),
-            'next': ('list_versions, get_evidence and get_timeline take '
+            'next': ('list_snapshots, get_evidence and get_timeline take '
                      'this id.')}))
 
     # 3 -------------------------------------------------------------------------
-    @mcp.tool(title='List the versions of a component', annotations=READ_ONLY)
-    async def list_versions(
+    @mcp.tool(title='List the snapshots of a component', annotations=READ_ONLY)
+    async def list_snapshots(
         component_id: Annotated[str, Field(description='The component id.')],
     ) -> dict:
-        """The versions (states) of a component, oldest first: version number,
+        """The snapshots of a component, oldest first: version number,
         status, name, from when it applies, which one is current, with the id
-        to pass to get_version and a web link for each."""
+        to pass to get_snapshot and a web link for each."""
         rows = await get(f'/identities/{component_id}/snapshots')
         return limited(clean({
             'component_id': component_id,
             'web_link': link_component(component_id),
-            'versions': [{
+            'snapshots': [{
                 'id': r.get('_id'), 'version': r.get('version'),
                 'status': r.get('status'), 'is_current': r.get('is_current'),
                 'name': r.get('name'),
@@ -585,16 +585,16 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 for r in rows]}))
 
     # 4 -------------------------------------------------------------------------
-    @mcp.tool(title='Get one version of a component', annotations=READ_ONLY)
-    async def get_version(
-        version_id: Annotated[str, Field(description=(
-            'The version id (a UUID) from list_versions.'))],
+    @mcp.tool(title='Get one snapshot of a component', annotations=READ_ONLY)
+    async def get_snapshot(
+        snapshot_id: Annotated[str, Field(description=(
+            'The snapshot id (a UUID) from list_snapshots.'))],
     ) -> dict:
-        """One version of a component: size, shape class, descriptors,
+        """One snapshot of a component: size, shape class, descriptors,
         derived properties, status and notes. The geometry is only a summary
         (counts); the web link opens the viewer. The reinforcement layouts
-        of the version are counted from the evidence."""
-        s = await get(f'/snapshots/{version_id}')
+        of the snapshot are counted from the evidence."""
+        s = await get(f'/snapshots/{snapshot_id}')
         identity_id = s.get('identity_id')
         layouts = await get(f'/identities/{identity_id}/evidence',
                             {'method': 'reinforcement_layout'}
@@ -616,7 +616,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             'supersedes': s.get('supersedes'),
             'superseded_by': s.get('superseded_by'),
             'geometry': geometry_summary(s.get('geometry')),
-            'reinforcement_layouts': layouts_of_version(
+            'reinforcement_layouts': layouts_of_snapshot(
                 layouts, s.get('_id')),
             'web_link': link_component(identity_id, s.get('_id'))
             if identity_id else None}))
@@ -710,7 +710,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     async def get_timeline(
         component_id: Annotated[str, Field(description='The component id.')],
     ) -> dict:
-        """What happened to a component, in order: origin, versions,
+        """What happened to a component, in order: origin, snapshots,
         corrections, evidence, changes, how it left circulation. Each event
         has a kind, a time (with its precision) and a short detail."""
         body = await get(f'/identities/{component_id}/timeline')
@@ -807,11 +807,11 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     ) -> dict:
         """What the catalog holds, in numbers, for the components that match
         the filters of search_components (none: the whole catalog you may
-        see). It counts components (one per element or batch, with its current
-        version), not rows of a list: the total, how many physical elements they
+        see). It counts components (one per single component or batch, with its current
+        snapshot), not rows of a list: the total, how many physical elements they
         stand for, and the counts by material (with its label), original
         function, dataset, shape class and circulation. The ranges give the
-        smallest and the largest value of each side of the elements that have a
+        smallest and the largest value of each side of the components that have a
         size, sides sorted largest, middle, smallest; lengths are in
         millimetres. It also says how many components have a current and how
         many an origin location, and how many of the counted components are
@@ -841,7 +841,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         not_public = int(stats.get('notPublic') or 0)
         total = int(stats.get('total') or 0)
         return limited(clean({
-            'counted': 'components with a current version that match the '
+            'counted': 'components with a current snapshot that match the '
                        'filters and that you may see',
             'total': total, 'pieces': stats.get('pieces'),
             'by_material': counted(stats.get('byMaterial'), labels.get),

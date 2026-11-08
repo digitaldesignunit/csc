@@ -138,13 +138,13 @@ async def validate_parent_identities(
         if self_id and pid == self_id:
             raise HTTPException(
                 status_code=400,
-                detail='identity cannot list itself in parent_identities',
+                detail='a component cannot list itself in parent_identities',
             )
         found = await col.find_one({'_id': pid}, {'_id': 1})
         if found is None:
             raise HTTPException(
                 status_code=404,
-                detail=f'Parent identity {pid} not found',
+                detail=f'Parent component {pid} not found',
             )
 
 
@@ -205,7 +205,7 @@ async def validate_snapshot_and_promote(
         raise HTTPException(
             status_code=500,
             detail=(
-                f'Identity {identity_id} not found for snapshot {snapshot_id}'
+                f'Component {identity_id} not found for snapshot {snapshot_id}'
             ),
         )
 

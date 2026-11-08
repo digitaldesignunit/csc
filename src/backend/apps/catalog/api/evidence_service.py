@@ -50,6 +50,7 @@ from apps.catalog.permissions import (
 )
 from apps.catalog.properties import contexts_for
 from apps.catalog.vocab import (
+    OPEN_STATUSES,
     TERMINAL_EXIT_KINDS,
     EvidenceMethod,
     PositionKind,
@@ -58,7 +59,8 @@ from apps.catalog.vocab import (
     UncertaintyType,
 )
 from apps.catalog.timeutil import parse_ts
-from .access import component_visible, dataset_of, require, viewer_of
+from .access import (
+    component_visible, dataset_of, may_know_open, require, viewer_of)
 from .catalog_common import now_iso
 
 MAX_BULK = 200
@@ -67,7 +69,7 @@ Scalar = Union[float, int, str]
 
 # WHAT A CLIENT SENDS ---------------------------------------------------------
 class PositionInput(BaseModel):
-    """Where on the element (3.3.2). ``kind: none`` with a description is
+    """Where on the component (3.3.2). ``kind: none`` with a description is
     always enough; a point is picked on the 3D viewer and needs the snapshot
     whose stored coordinates it uses."""
     model_config = ConfigDict(extra='forbid')
@@ -82,7 +84,7 @@ class PositionInput(BaseModel):
         None, description='Picked point in stored coordinates; for a rebound '
                           'grid the server sets the grid centre')
     description: Optional[str] = Field(
-        None, description='Where on the element, in words, e.g. "north face, '
+        None, description='Where on the component, in words, e.g. "north face, '
                           'mid-span"')
 
 
@@ -209,6 +211,10 @@ class EvidenceView(Evidence):
     the state of the piece it belongs to (4.1)."""
     warnings: List[str] = Field(default_factory=list)
     context: Optional[ContextView] = None
+    # response-only (8.195): a draft or pending correction of this record is
+    # open. Only the fact, for a contributor or moderator of the dataset and
+    # admins; a constant False for everyone else. Not in the exports.
+    has_open_correction: bool = False
 
 
 # ERRORS ----------------------------------------------------------------------
@@ -254,16 +260,21 @@ async def evidence_body(request: Request, viewer: Viewer,
                         record: Dict[str, Any], identity: Dict[str, Any], *,
                         listing: bool = False, with_context: bool = False,
                         snapshots: Optional[List[Dict[str, Any]]] = None,
-                        context: Optional[Tuple[str, bool]] = None
+                        context: Optional[Tuple[str, bool]] = None,
+                        open_correction: Optional[bool] = None
                         ) -> Dict[str, Any]:
     """The record as ``viewer`` sees it, validated against the model.
-    ``context`` is ``viewer_context`` when a list has it already."""
+    ``context`` is ``viewer_context`` when a list has it already.
+    ``open_correction`` is ``has_open_correction`` (8.195); the field is in
+    the body only when a route asks for it, so the exports do not carry it."""
     tier, email_ok = context or await viewer_context(request, viewer,
                                                      identity)
     stored = Evidence.model_validate(record).model_dump(by_alias=True,
                                                         mode='json')
     body = project_evidence(stored, tier, email_ok=email_ok, listing=listing)
     body['warnings'] = record_warnings(record)
+    if open_correction is not None:
+        body['has_open_correction'] = open_correction
     body['context'] = None
     if with_context:
         if snapshots is None:
@@ -275,6 +286,23 @@ async def evidence_body(request: Request, viewer: Viewer,
         context = contexts_for(identity, snapshots, [record])[record['_id']]
         body['context'] = context.as_dict()
     return body
+
+
+async def open_corrections(request: Request, viewer: Viewer,
+                            identity: Dict[str, Any]) -> Optional[set]:
+    """The ids of the records of one element that have a draft or pending
+    correction, for ``has_open_correction`` (8.195): one ``distinct`` per
+    request, never a query per record. None when the viewer is not told
+    (``may_know_open``): the flag is then a constant False."""
+    if not viewer.logged_in:
+        return None
+    if not may_know_open(viewer, await dataset_of(request,
+                                                   identity.get('dataset'))):
+        return None
+    return set(await request.app.mongodb_component_evidence.distinct(
+        'supersedes', {'identity_id': identity['_id'],
+                       'supersedes': {'$ne': None},
+                       'status': {'$in': list(OPEN_STATUSES)}}))
 
 
 async def projector(request: Request, viewer: Viewer,
@@ -334,7 +362,7 @@ def gate_identity(identity: Dict[str, Any],
             and parse_ts(observed_at) > parse_ts(exit_['at']):
         raise HTTPException(
             status_code=409,
-            detail=f'The component no longer exists as this element '
+            detail=f'The component no longer exists as this component '
                    f'({exit_["kind"]}, {exit_["at"]}): only observations '
                    f'from before that date are recorded (I28).')
 
