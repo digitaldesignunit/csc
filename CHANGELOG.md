@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.6] - 2026-11-25
+
+Hardening of the image uploads, and pinned backend packages. No Grasshopper change: `CSC_Update` is not needed
+for this release.
+
+### Security
+
+- **Image uploads (photos and evidence attachments):** an image is checked in its raw bytes before it is opened.
+  Refused are, besides images above 40 megapixels: a WebP above 16 megapixels, more than 256 KB of EXIF metadata,
+  EXIF or multi-picture directories with too many or too large entries, and a JPEG with more than 64 scans. The
+  refusal names the reason.
+- **Web packages:** Next.js 16.4.5 (seven advisories of medium severity), and `hono`, `@hono/node-server` and
+  `body-parser`, which only development tools use. With this Next.js version a download through the web app
+  shows no size beforehand.
+
+### Changed
+
+- **Photo metadata:** a stored photo keeps camera make, model and capture time only as text of at most 64
+  characters and the orientation only when it is valid. The JPEG comment (and a PNG text comment) is dropped, also
+  from the picture in the PDF passport. `scripts/db_maintenance/migrate_strip_photo_gps.py` removes the comment
+  from photos stored earlier.
+- **Server packages:** `constraints.txt` pins every package of the backend exactly, each at a version at least two
+  weeks old. The server builds a new environment with this release.
+
+### Fixed
+
+- An image that cannot be converted is refused (400 for a photo, 415 for an attachment) instead of ending in a
+  500.
+
 ## [0.6.4.5] - 2026-11-08
 
 The web controls follow the permission rules, and a component can move to another dataset. No Grasshopper
