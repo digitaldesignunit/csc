@@ -19,7 +19,7 @@ not working, etc. pp.
 - The Catalog consists of a _database_, _backend_, _frontend_, and _Grasshopper interface_
 - We use [_MongoDB Atlas_](https://www.mongodb.com/) as database
 - The backend is implemented using [_FastAPI_](https://fastapi.tiangolo.com/)
-- We use Python 3.13 (see `src/backend/constraints.txt` for the server's package caps)
+- We use Python 3.13 (see `src/backend/constraints.txt` for the server's package pins)
 - The frontend is implemented using the [_Next.JS_](https://nextjs.org/)
 framework
 - The frontend is designed to connect to the backend on the same server using JWT-based auth
@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.4.5 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.4.5`); the single source is the `VERSION` file.
+- **CSC**: 0.6.4.6 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.4.6`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 

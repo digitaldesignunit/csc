@@ -291,8 +291,10 @@ async def put_snapshot_photo(
         image = await asyncio.to_thread(open_upload_photo, raw)
     except ImageTooLarge as exc:
         raise HTTPException(status_code=413, detail=str(exc))
-    except UnreadableImage:
-        raise HTTPException(status_code=400, detail='Invalid image file')
+    except UnreadableImage as exc:
+        # our own fixed texts, none with data from the file: the user reads
+        # why (too much EXIF metadata, too many scans, not an image)
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         raise HTTPException(status_code=400, detail='Invalid image file')
 
@@ -309,6 +311,12 @@ async def put_snapshot_photo(
             max_bytes=request.app.snapshot_photo_max_output_bytes,
             max_long_edge_px=request.app.snapshot_photo_max_long_edge_px,
         )
+    except UnreadableImage as exc:
+        # a fault of the file in an image step (convert, resize, encode): a
+        # 400, and a line in the log, since a fault of the server (a
+        # MemoryError, a broken decoder) looks the same from outside
+        log.warning('put_snapshot_photo image step', exc_info=True)
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         log.exception('put_snapshot_photo encode')
         raise HTTPException(

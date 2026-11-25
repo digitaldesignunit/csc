@@ -25,6 +25,7 @@ from apps.catalog.api.snapshot_images import (
     UnreadableImage,
     open_upload_photo,
 )
+from apps.catalog.evidence import files as evidence_files
 from apps.catalog.migration06.steps import CUTOVER_STEPS, Context, run
 from support import seed_05_catalog, sid
 
@@ -197,3 +198,209 @@ def test_the_mesh_routes_are_rate_limited(world):
     finally:
         local_limiter.enabled = False
         local_limiter.reset()
+
+
+# RAW BYTES BEFORE PILLOW (8.197) ---------------------------------------------
+def _apng_declaring(width: int, height: int) -> bytes:
+    """An animated PNG of two 1 x 1 frames (the first disposed to the
+    background) on a canvas of the given size: under 200 bytes."""
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack('>I', len(data)) + body + struct.pack(
+            '>I', zlib.crc32(body) & 0xFFFFFFFF)
+
+    def fctl(seq: int) -> bytes:
+        return chunk(b'fcTL', struct.pack(
+            '>IIIIIHHBB', seq, 1, 1, 0, 0, 1, 10, 1, 0))
+    pixel = zlib.compress(b'\x00\x00\x00\x00\x00')
+    return (b'\x89PNG\r\n\x1a\n'
+            + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height,
+                                         8, 6, 0, 0, 0))
+            + chunk(b'acTL', struct.pack('>II', 2, 0))
+            + fctl(0) + chunk(b'IDAT', pixel) + fctl(1)
+            + chunk(b'fdAT', struct.pack('>I', 2) + pixel)
+            + chunk(b'IEND', b''))
+
+
+def _jpeg_with_exif_segments() -> bytes:
+    """10 APP1 segments of repeated ``Exif`` plus two zero bytes: 630 KB."""
+    payload = b'Exif\x00\x00' * 10_500
+    segment = b'\xff\xe1' + (len(payload) + 2).to_bytes(2, 'big') + payload
+    base = _jpeg()
+    return base[:2] + segment * 10 + base[2:]
+
+
+@pytest.fixture
+def pillow_is_not_called(monkeypatch):
+    calls = []
+
+    def refuse(*args, **kwargs):
+        calls.append(args)
+        raise AssertionError('Image.open was called')
+    monkeypatch.setattr(Image, 'open', refuse)
+    return calls
+
+
+def test_the_photo_route_refuses_a_declared_canvas_and_much_exif_unopened(
+        world, pillow_is_not_called):
+    api, admin = world['api'], world['admin']
+    url = f'/snapshots/{DRAFT}/photos/0'
+    big = api.put(url, headers=admin, files={
+        'photo': ('p.png', _apng_declaring(9000, 9000), 'image/png')})
+    assert big.status_code == 413
+    assert 'megapixels' in big.json()['detail']
+    heavy = api.put(url, headers=admin, files={
+        'photo': ('p.jpg', _jpeg_with_exif_segments(), 'image/jpeg')})
+    assert heavy.status_code == 400
+    assert pillow_is_not_called == []
+
+
+def test_the_photo_route_stores_a_png_with_a_normal_exif_chunk(world):
+    exif = Image.Exif()
+    exif[0x010F] = 'Apple'
+    buf = io.BytesIO()
+    Image.new('RGB', (32, 24), (1, 2, 3)).save(buf, 'PNG', exif=exif)
+    api, admin = world['api'], world['admin']
+    url = f'/snapshots/{DRAFT}/photos/0'
+    ok = api.put(url, headers=admin, files={
+        'photo': ('p.png', buf.getvalue(), 'image/png')})
+    assert ok.status_code == 200, ok.text
+    stored = api.get(url, headers=admin)
+    assert stored.status_code == 200
+    kept = Image.open(io.BytesIO(stored.content)).getexif()
+    assert kept.get(0x010F) == 'Apple'
+
+
+def test_the_photo_route_stores_no_jpeg_comment(world):
+    raw = _jpeg()
+    comment = b'\xff\xfe' + (2 + 9).to_bytes(2, 'big') + b'my diary!'
+    raw = raw[:2] + comment + raw[2:]
+    api, admin = world['api'], world['admin']
+    url = f'/snapshots/{DRAFT}/photos/0'
+    assert api.put(url, headers=admin, files={
+        'photo': ('p.jpg', raw, 'image/jpeg')}).status_code == 200
+    stored = api.get(url, headers=admin)
+    assert stored.status_code == 200
+    assert b'my diary!' not in stored.content
+
+
+def test_an_attachment_image_is_checked_the_same_way(
+        tmp_path, pillow_is_not_called):
+    with pytest.raises(evidence_files.UnsupportedFile) as big:
+        evidence_files.process_upload(
+            _apng_declaring(9000, 9000), str(tmp_path),
+            max_image_bytes=1_000_000, max_long_edge_px=4096)
+    assert 'megapixels' in str(big.value)
+    with pytest.raises(evidence_files.UnsupportedFile):
+        evidence_files.process_upload(
+            _jpeg_with_exif_segments(), str(tmp_path),
+            max_image_bytes=1_000_000, max_long_edge_px=4096)
+    assert pillow_is_not_called == []
+
+
+# T5 (8.197 f): the refusals reach the user, the preview has no comment -------
+def _jpeg_with_scans(count: int) -> bytes:
+    sos = b'\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34'
+    base = _jpeg()
+    return base[:-2] + sos * (count - 1) + b'\xff\xd9'
+
+
+def _webp_declaring(width: int, height: int) -> bytes:
+    frames = [Image.new('RGB', (16, 12), (255, 0, 0)),
+              Image.new('RGB', (16, 12), (0, 255, 0))]
+    buf = io.BytesIO()
+    frames[0].save(buf, 'WEBP', save_all=True, append_images=frames[1:],
+                   duration=100, lossless=True)
+    raw = bytearray(buf.getvalue())
+    assert raw[12:16] == b'VP8X'
+    raw[24:27] = (width - 1).to_bytes(3, 'little')
+    raw[27:30] = (height - 1).to_bytes(3, 'little')
+    return bytes(raw)
+
+
+def test_the_photo_route_says_why_an_image_is_refused(
+        world, pillow_is_not_called):
+    api, admin = world['api'], world['admin']
+    url = f'/snapshots/{DRAFT}/photos/0'
+    exif = api.put(url, headers=admin, files={
+        'photo': ('p.jpg', _jpeg_with_exif_segments(), 'image/jpeg')})
+    assert exif.status_code == 400
+    assert 'EXIF metadata' in exif.json()['detail']
+    assert 'image' in exif.json()['detail']
+    scans = api.put(url, headers=admin, files={
+        'photo': ('p.jpg', _jpeg_with_scans(65), 'image/jpeg')})
+    assert scans.status_code == 400
+    assert 'scans' in scans.json()['detail'] and '64' in scans.json()['detail']
+    webp = api.put(url, headers=admin, files={
+        'photo': ('p.webp', _webp_declaring(5000, 5000), 'image/webp')})
+    assert webp.status_code == 413, webp.text
+    assert 'WebP' in webp.json()['detail'] and '16' in webp.json()['detail']
+    gif = api.put(url, headers=admin, files={
+        'photo': ('p.jpg', GIF, 'image/jpeg')})
+    assert gif.status_code == 400
+    assert gif.json()['detail']                     # a text, whatever it says
+    assert pillow_is_not_called == []
+
+
+def test_the_attachment_path_says_why_an_image_is_refused(
+        tmp_path, pillow_is_not_called):
+    for raw, word in [(_jpeg_with_exif_segments(), 'EXIF metadata'),
+                      (_jpeg_with_scans(65), 'scans')]:
+        with pytest.raises(evidence_files.UnsupportedFile) as refused:
+            evidence_files.process_upload(
+                raw, str(tmp_path), max_image_bytes=1_000_000,
+                max_long_edge_px=4096)
+        assert word in str(refused.value)
+    assert pillow_is_not_called == []
+
+
+def test_the_pdf_preview_of_an_old_photo_carries_no_comment(tmp_path):
+    from apps.catalog.api import exports
+    comment = b'\xff\xfe' + (2 + 9).to_bytes(2, 'big') + b'my diary!'
+    raw = _jpeg()
+    path = tmp_path / '0.jpg'
+    path.write_bytes(raw[:2] + comment + raw[2:])
+    assert b'my diary!' in path.read_bytes()
+    preview = exports._preview_bytes(str(path))
+    assert preview and b'my diary!' not in preview
+
+
+def _gray_png_with_text(key: bytes, value: bytes) -> bytes:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack('>I', len(data)) + body + struct.pack(
+            '>I', zlib.crc32(body) & 0xFFFFFFFF)
+    buf = io.BytesIO()
+    Image.new('L', (16, 12), 90).save(buf, 'PNG')
+    base = buf.getvalue()
+    at = base.index(b'IDAT') - 4
+    return base[:at] + chunk(b'tEXt', key + b'\x00' + value) + base[at:]
+
+
+def test_a_failing_image_step_is_a_400_on_the_photo_route(world):
+    raw = _gray_png_with_text(b'transparency', b'zzz')
+    response = world['api'].put(
+        f'/snapshots/{DRAFT}/photos/0', headers=world['admin'],
+        files={'photo': ('p.png', raw, 'image/png')})
+    assert response.status_code == 400, response.text
+    assert 'image' in response.json()['detail']
+
+
+def test_a_failing_image_step_is_a_refusal_of_the_attachment_path(tmp_path):
+    raw = _gray_png_with_text(b'transparency', b'zzz')
+    with pytest.raises(evidence_files.UnsupportedFile):
+        evidence_files.process_upload(
+            raw, str(tmp_path), max_image_bytes=1_000_000,
+            max_long_edge_px=4096)
+    assert not list((tmp_path / '.incoming').glob('*'))     # no half file
+
+
+def test_a_failing_image_step_leaves_a_line_in_the_log(world, caplog):
+    import logging
+    raw = _gray_png_with_text(b'transparency', b'zzz')
+    with caplog.at_level(logging.WARNING):
+        response = world['api'].put(
+            f'/snapshots/{DRAFT}/photos/0', headers=world['admin'],
+            files={'photo': ('p.png', raw, 'image/png')})
+    assert response.status_code == 400
+    assert 'image step' in caplog.text
