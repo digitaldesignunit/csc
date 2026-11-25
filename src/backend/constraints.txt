@@ -1,5 +1,7 @@
 # CSC Backend Constraints
 # Upper bounds that are not about compatibility with CSC code, but with the server.
+# (Since 0.6.4.6 every package is pinned exactly, see the end of this file; the
+# seven below were `<=` caps and are the versions the set resolves to under them.)
 #
 # Uberspace 7 runs CentOS 7 with glibc 2.17. The newest releases of the packages
 # below only ship manylinux_2_28 wheels (glibc >= 2.28); without these caps pip
@@ -13,15 +15,15 @@
 #
 # Install with: pip install -r requirements.txt -c constraints.txt
 
-numpy<=2.2.6
-scipy<=1.16.3
-scikit-learn<=1.7.2
-robust-laplacian<=1.0.0
-pillow<=12.2.0
+numpy==2.2.6
+scipy==1.16.3
+scikit-learn==1.7.2
+robust-laplacian==1.0.0
+pillow==12.2.0
 # via matplotlib; 1.3.3 already needs glibc 2.28
-contourpy<=1.3.2
+contourpy==1.3.2
 # 2.2.0 ships only manylinux_2_28 wheels (checked 2026-10-10)
-shapely<=2.1.2
+shapely==2.1.2
 # the mail templates (decision 8.138): jinja2 is pure Python, markupsafe ships
 # manylinux2014 wheels for 3.13; pinned to what the backend was tested with
 jinja2==3.1.6
@@ -57,3 +59,72 @@ cryptography==50.0.1
 # both libraries: pinned to the versions the tests ran with
 slowapi==0.1.10
 limits==5.8.0
+# the TLS roots, the DNS resolver and the MongoDB driver (0.6.4.6, decision
+# 8.197): pinned to releases at least two weeks old, so that a new build of the
+# server environment does not take the release of that day. certifi 2026.10.19
+# or newer answers the critical advisory; all three are pure Python or have
+# manylinux2014 wheels for 3.13 (checked 2026-11-25 with `pip download` and the
+# flags of `invoke check-server-wheels`, Linux markers: the task itself fails on
+# Windows, where pip asks for pywin32)
+certifi==2026.10.23
+dnspython==2.9.2
+pymongo==4.19.0
+#
+# --- every other package the server installs (0.6.4.6, decision 8.197) -------
+# The rest of what `pip install -r requirements.txt` resolves for CPython 3.13
+# on glibc 2.17, transitive packages included, pinned exactly: each is the
+# newest release that was at least two weeks old on 2026-11-25 and has a
+# manylinux2014 wheel (pure Python needs none). Without these lines a rebuild of
+# the server environment takes the release of that day. To renew, from
+# src/backend: `pip download -r requirements.txt -c constraints.txt
+# --only-binary=:all: --python-version 3.13 --platform manylinux2014_x86_64
+# --platform manylinux_2_17_x86_64 --uploaded-prior-to <14 days ago>
+# -d <empty folder>` on a copy of this file without these lines (on Windows pip
+# asks for pywin32: the markers of the host decide), read the versions from the
+# wheel names, check the advisories (OSV), run `invoke test-release` with them,
+# then replace the lines. Windows-only packages are not pinned.
+annotated-doc==0.0.6
+annotated-types==0.8.0
+anyio==4.16.0
+attrs==26.1.0
+bcrypt==5.0.0
+cffi==2.1.1
+charset-normalizer==3.5.2
+click==8.5.1
+cloudpickle==3.1.2
+cycler==0.12.1
+deprecated==3.0.1
+email-validator==2.3.0
+fonttools==4.68.0
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.9.0
+httpx==0.28.1
+idna==3.20
+joblib==1.6.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+kiwisolver==1.5.1
+matplotlib==3.11.2
+networkx==3.7
+packaging==26.3
+pycparser==3.12
+pydantic==2.14.3
+pydantic-core==2.50.4
+pyparsing==3.3.3
+python-dateutil==4.0.0
+python-dotenv==1.2.4
+python-multipart==0.0.33
+pyyaml==6.0.3
+referencing==0.37.0
+rpds-py==2026.9.1
+threadpoolctl==3.8.0
+tqdm==4.70.1
+trimesh==5.2.0
+typing-extensions==4.16.0
+typing-inspection==0.4.5
+tzdata==2026.6
+uvloop==0.23.0
+watchfiles==1.3.0
+websockets==17.4
+wrapt==2.5.2
