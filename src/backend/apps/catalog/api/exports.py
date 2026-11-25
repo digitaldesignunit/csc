@@ -202,7 +202,12 @@ def _preview_bytes(path: Optional[str]) -> Optional[bytes]:
         return None
     try:
         with Image.open(path) as image:
+            # convert first, then thumbnail the converted copy: never
+            # ``draft()`` a JpegImageFile (GHSA-8g5g-8vmr-9782 is not
+            # reachable while this order stands; Pillow pin, 8.197)
             image = image.convert('RGB')
+            # an old stored photo may still carry its JPEG comment
+            image.info.pop('comment', None)
             image.thumbnail((700, 700))
             out = io.BytesIO()
             image.save(out, format='JPEG', quality=82)

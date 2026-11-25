@@ -19,6 +19,10 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 PDF = 'application/pdf'
 JPEG = 'image/jpeg'
 EXTENSION: Dict[str, str] = {PDF: 'pdf', JPEG: 'jpg'}
@@ -83,7 +87,7 @@ def process_upload(raw: bytes, root: str, *, max_image_bytes: int,
     ``root``. Raises ``UnsupportedFile``."""
     # imported here: the api package imports its routers, which import this
     from apps.catalog.api.snapshot_images import (
-        ImageTooLarge,
+        UnreadableImage,
         compress_and_save_jpeg,
         open_upload_photo,
     )
@@ -101,13 +105,18 @@ def process_upload(raw: bytes, root: str, *, max_image_bytes: int,
     else:
         try:
             image = open_upload_photo(raw)
-        except ImageTooLarge as exc:
+        except UnreadableImage as exc:   # also ImageTooLarge; our own texts
             raise UnsupportedFile(str(exc)) from exc
         except Exception as exc:
             raise UnsupportedFile('not a readable image') from exc
         try:
             compress_and_save_jpeg(image, temp, max_bytes=max_image_bytes,
                                    max_long_edge_px=max_long_edge_px)
+        except UnreadableImage as exc:   # a fault of the file, not of the disk
+            log.warning('process_upload image step', exc_info=True)
+            if os.path.exists(temp):
+                os.remove(temp)
+            raise UnsupportedFile(str(exc)) from exc
         except Exception:
             if os.path.exists(temp):
                 os.remove(temp)
